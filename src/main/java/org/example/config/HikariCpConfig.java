@@ -1,4 +1,4 @@
-package org.example;
+package org.example.config;
 
 import com.zaxxer.hikari.HikariConfig;
 import com.zaxxer.hikari.HikariDataSource;
@@ -6,12 +6,12 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.util.Properties;
 
 public class HikariCpConfig {
-    public static HikariDataSource  configure(){
+    public static HikariDataSource get(){
         Properties properties = GetProperties.get();
 
-        String jdbcUrl = properties.getProperty("jdbc.url");
-        String username = properties.getProperty("jdbc.username");
-        String password = properties.getProperty("jdbc.password");
+        String jdbcUrl = properties.getProperty("myliquid.jdbc.url");
+        String username = properties.getProperty("myliquid.jdbc.username");
+        String password = properties.getProperty("myliquid.jdbc.password");
 
         HikariConfig config = new HikariConfig();
         config.setJdbcUrl(jdbcUrl);
@@ -19,6 +19,5 @@ public class HikariCpConfig {
         config.setPassword(password);
 
         return new HikariDataSource(config);
-
     }
 }

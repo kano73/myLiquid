@@ -1,4 +1,4 @@
-package org.example;
+package org.example.config;
 
 import java.io.FileInputStream;
 import java.io.IOException;
@@ -9,7 +9,7 @@ public class GetProperties {
 
     public static Properties get() {
         Properties properties = new Properties();
-        String filename = "\"src/main/resources/application.properties\"";
+        String filename = "src/main/resources/application.properties";
         try (FileInputStream input = new FileInputStream(filename)) {
             properties.load(input);
         }catch (IOException e){
