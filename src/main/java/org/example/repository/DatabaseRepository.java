@@ -5,9 +5,11 @@ import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.config.HikariCpConfig;
 import org.example.model.Change;
+import org.example.model.Migration;
 
 import java.sql.*;
 import java.util.ArrayList;
+import java.util.List;
 
 public class DatabaseRepository {
 
@@ -15,13 +17,45 @@ public class DatabaseRepository {
     private static Connection connection;
 
     static {
-        dataSource = HikariCpConfig.get();
+        dataSource = HikariCpConfig.getHikariDataSource();
     }
 
     private static final Logger logger = LogManager.getLogger(DatabaseRepository.class);
 
     public DatabaseRepository() {
         initTables();
+    }
+
+    public boolean acquireLock() throws SQLException {
+        String sql = "UPDATE LOCK SET LOCKED = TRUE WHERE ID = 1 AND LOCKED = FALSE";
+        return setLockedStatus(sql, "Lock acquired successfully.", "Lock is already acquired by another process.");
+    }
+
+    public boolean releaseLock() throws SQLException {
+        String sql = "UPDATE LOCK SET LOCKED = FALSE WHERE ID = 1";
+        return setLockedStatus(sql, "Lock released successfully.", "Failed to release lock");
+    }
+
+    private boolean setLockedStatus(String sql, String successMessage, String errorMessage) throws SQLException {
+        try (Connection connection = dataSource.getConnection()) {
+            connection.setAutoCommit(false);
+
+            try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                int rowsUpdated = pstmt.executeUpdate();
+                if (rowsUpdated > 0) {
+                    connection.commit();
+                    logger.info(successMessage);
+                    return true;
+                } else {
+                    connection.rollback();
+                    logger.warn(errorMessage);
+                    throw new RuntimeException(errorMessage);
+                }
+            } catch (SQLException e) {
+                connection.rollback();
+                throw new RuntimeException("Database operation failed", e);
+            }
+        }
     }
 
     public void initTables() {
@@ -76,15 +110,26 @@ public class DatabaseRepository {
         }
     }
 
-    public void commitAndClose() {
+    public DatabaseRepository commit() {
+        try {
+            if (connection == null && connection.isClosed()) {
+                throw new RuntimeException("Database connection is closed");
+            }
+            connection.commit();
+            return this;
+        } catch (SQLException e) {
+            throw new RuntimeException("Failed to commit ", e);
+        }
+    }
+
+    public void closeConnection() {
         try {
             if (connection != null && !connection.isClosed()) {
-                connection.commit();
                 connection.close();
                 connection = null;
             }
         } catch (SQLException e) {
-            throw new RuntimeException("Failed to commit and close database connection", e);
+            throw new RuntimeException("Failed to close database connection", e);
         }
     }
 
@@ -95,19 +140,25 @@ public class DatabaseRepository {
                 connection.close();
                 connection = null;
             }
+            logger.info("Rollback and close database connection");
         } catch (SQLException e) {
             throw new RuntimeException("Failed to rollback and close database connection", e);
         }
     }
 
     public ArrayList<Change> getAllChanges() {
+        if(connection==null) {
+            throw new RuntimeException("Database connection not open");
+        }
+
         String sql = """
          SELECT ID, AUTHOR, FILENAME, MD5SUM, DESCRIPTION, EXECUTED_AT
-         FROM CHANGELOG;""";
+         FROM CHANGELOG ORDER BY ID DESC ;""";
 
         ArrayList<Change> changes = new ArrayList<>();
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
+
             changes = rowMapper(rs);
         } catch (Exception e) {
             throw new RuntimeException("Failed to fetch changes", e);
@@ -115,45 +166,54 @@ public class DatabaseRepository {
         return changes;
     }
 
-    public boolean isDataBaseIsAvailableForChanges() {
-        String sql = "SELECT LOCKED FROM LOCK LIMIT 1;";
-        try (Statement stmt = connection.createStatement();
-             ResultSet rs = stmt.executeQuery(sql)) {
-            if (rs.next()) {
-                return !rs.getBoolean("LOCKED");
-            } else {
-                throw new RuntimeException("Unexpected behaviour: No LOCKED found in table LOCK");
-            }
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to check database availability", e);
-        }
-    }
-
-    public boolean setLockedStatus(boolean locked) {
-        String sql = "UPDATE LOCK SET LOCKED = ? WHERE ID = 1";
-        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setBoolean(1, locked);
-            return pstmt.executeUpdate() > 0;
-        } catch (Exception e) {
-            throw new RuntimeException("Failed to set lock status", e);
-        }
-    }
-
     public boolean addChange(Change change) {
+        if(connection==null) {
+            throw new RuntimeException("Database connection not open");
+        }
+
         String sql = """ 
              INSERT INTO CHANGELOG 
-             (AUTHOR, FILENAME, MD5SUM, DESCRIPTION, EXECUTED_AT)
-             VALUES (?, ?, ?, ?, ?)
+             (AUTHOR, FILENAME, MD5SUM, DESCRIPTION)
+             VALUES (?, ?, ?, ?)
              """;
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
             pstmt.setString(1, change.getAuthor());
             pstmt.setString(2, change.getFilename());
             pstmt.setString(3, change.getMd5sum());
             pstmt.setString(4, change.getDescription());
-            pstmt.setTimestamp(5, Timestamp.valueOf(change.getExecuted_at()));
+
             return pstmt.executeUpdate() > 0;
         } catch (Exception e) {
+            rollbackAndClose();
+            logger.error("Failed to add change", e);
             throw new RuntimeException("Failed to add change", e);
+        }
+    }
+
+    public void executeMigration(Migration migration) throws SQLException {
+        if (connection == null || connection.isClosed()) {
+            throw new RuntimeException("Database connection is not open");
+        }
+
+        List<String> sqls = migration.getStatements();
+
+        try {
+            connection.setAutoCommit(false);
+
+            for (String sql : sqls) {
+                try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+                    pstmt.executeUpdate();
+                    logger.info("Executed SQL: " + sql);
+                } catch (SQLException e) {
+                    connection.rollback();
+                    logger.error("Failed to execute SQL: " + sql + migration.getFilename(), e);
+                    throw new RuntimeException("Failed to execute migration", e);
+                }
+            }
+            logger.info("Migration executed successfully: " + migration.getFilename());
+        } catch (SQLException e) {
+            connection.rollback();
+            throw new RuntimeException("Migration execution failed. Rolled back transaction.", e);
         }
     }
 

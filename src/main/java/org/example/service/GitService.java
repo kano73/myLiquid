@@ -29,7 +29,7 @@ public class GitService {
         String token = prop.getProperty("myliquid.git.token");
         String username = prop.getProperty("myliquid.git.username");
 
-        localPath = localPath == null ? "./migrations" : localPath;
+        localPath = localPath == null ? "./myLiquid_migrations" : localPath;
         if (repoUrl == null || repoUrl.isEmpty()) {
             throw new IllegalArgumentException("git.link (Link for git repository) property not set");
         }

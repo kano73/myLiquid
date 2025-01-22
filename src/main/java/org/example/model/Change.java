@@ -1,13 +1,12 @@
 package org.example.model;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 
-public class Change {
+public class Change extends BaseMigCha{
     private Integer id;
-    private String author;
-    private String filename;
+
     private String md5sum;
-    private String description;
     private LocalDateTime executed_at;
 
     public Integer getId() {
@@ -18,21 +17,6 @@ public class Change {
         this.id = id;
     }
 
-    public String getAuthor() {
-        return author;
-    }
-
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-
-    public String getFilename() {
-        return filename;
-    }
-
-    public void setFilename(String filename) {
-        this.filename = filename;
-    }
 
     public String getMd5sum() {
         return md5sum;
@@ -42,13 +26,6 @@ public class Change {
         this.md5sum = md5sum;
     }
 
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
 
     public LocalDateTime getExecuted_at() {
         return executed_at;
@@ -56,5 +33,30 @@ public class Change {
 
     public void setExecuted_at(LocalDateTime executed_at) {
         this.executed_at = executed_at;
+    }
+
+    @Override
+    public String toString() {
+        return "Change{" +
+                "id=" + id +
+                ", super=" + super.toString() +
+                ", md5sum='" + md5sum + '\'' +
+                ", executed_at=" + executed_at +
+                '}';
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Change change = (Change) o;
+        return Objects.equals(id, change.id) &&
+                Objects.equals(md5sum, change.md5sum) &&
+                Objects.equals(executed_at, change.executed_at) &&
+                super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(id, md5sum, executed_at, super.hashCode());
     }
 }

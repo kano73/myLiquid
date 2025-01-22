@@ -1,39 +1,15 @@
 package org.example.model;
 
-
 import com.google.gson.Gson;
 
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
+import java.util.Objects;
 
-public class Migration {
-    private String filename;
-    private String author;
-    private String description;
+public class Migration extends BaseMigCha{
+
     private List<String> statements;
-
-    public String getFilename() {
-        return filename;
-    }
-
-    public void setFilename(String filename) {
-        this.filename = filename;
-    }
-
-    public String getAuthor() {
-        return author;
-    }
-
-    public void setAuthor(String author) {
-        this.author = author;
-    }
-
-    public String getDescription() {
-        return description;
-    }
-
-    public void setDescription(String description) {
-        this.description = description;
-    }
 
     public List<String> getStatements() {
         return statements;
@@ -46,5 +22,47 @@ public class Migration {
     public String toJsonText() {
         Gson gson = new Gson();
         return gson.toJson(this);
+    }
+
+    public Change toChange() {
+        Change change = new Change();
+
+        change.setFilename(getFilename());
+        change.setDescription(getDescription());
+        change.setAuthor(getAuthor());
+        change.setMd5sum(calculateMD5());
+
+        return change;
+    }
+
+    public String calculateMD5(){
+        String jsonString = this.toJsonText();
+
+        MessageDigest md;
+        try{
+            md = MessageDigest.getInstance("MD5");
+        }catch (Exception e){
+            throw new RuntimeException(e);
+        }
+        byte[] hashBytes = md.digest(jsonString.getBytes(StandardCharsets.UTF_8));
+
+        StringBuilder hexString = new StringBuilder();
+        for (byte b : hashBytes) {
+            hexString.append(String.format("%02x", b));
+        }
+
+        return hexString.toString();
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (o == null || getClass() != o.getClass()) return false;
+        Migration migration = (Migration) o;
+        return Objects.equals(statements, migration.statements) && super.equals(o);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(super.hashCode(), statements);
     }
 }

@@ -6,7 +6,7 @@ import com.zaxxer.hikari.HikariDataSource;
 import java.util.Properties;
 
 public class HikariCpConfig {
-    public static HikariDataSource get(){
+    public static HikariDataSource getHikariDataSource(){
         Properties properties = GetProperties.get();
 
         String jdbcUrl = properties.getProperty("myliquid.jdbc.url");
