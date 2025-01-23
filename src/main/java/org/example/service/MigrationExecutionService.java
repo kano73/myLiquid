@@ -2,25 +2,44 @@ package org.example.service;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
+import org.example.config.GetProperties;
 import org.example.exeptions.Md5SumNotMatch;
+import org.example.model.BaseMigCha;
 import org.example.model.ChangeLog;
 import org.example.model.Migration;
 import org.example.model.ChangeSet;
 import org.example.repository.ChangesRepository;
 
+import java.sql.SQLException;
 import java.util.ArrayList;
+import java.util.Collections;
 import java.util.List;
+import java.util.Properties;
 
-public class CompareMigAndChaService {
+public class MigrationExecutionService {
+    private static String migVersion;
+
+    private List<Migration> executedMigrations;
+    private List<ChangeSet> executedChangeSets;
+    private List<ChangeSet> notExecutedChangeSets;
+
     private final DatabaseServiceImplementation dbService;
+    private static final Logger logger = LogManager.getLogger(MigrationExecutionService.class);
 
-    private static final Logger logger = LogManager.getLogger(CompareMigAndChaService.class);
+    static {
+        Properties properties = GetProperties.get();
+        migVersion = properties.getProperty("myliquid.migration.version");
+    }
 
-    public CompareMigAndChaService(DatabaseServiceImplementation dbService) {
+    public MigrationExecutionService(DatabaseServiceImplementation dbService) {
         this.dbService = dbService;
     }
 
-    public List<ChangeSet> findNotExecutedChangesAndCheckExecuted() {
+    public void migrate(){
+
+    }
+
+    public void groupSetsAndMig() throws SQLException {
         List<Migration> executedMigrations = dbService.getAllChanges();
 
         ChangeLog changeLog = ChangesRepository.readMasterChanges();
@@ -28,22 +47,51 @@ public class CompareMigAndChaService {
 
         List<ChangeSet> changeSets = ChangesRepository.readChangesFromList(filesInOrder);
 
-        List<Migration> executedChangesToCheck = new ArrayList<>();
-        List<ChangeSet> notExecutedChangeSets = new ArrayList<>();
-
         for (ChangeSet changeSet : changeSets) {
             if (executedMigrations.stream()
-                    .anyMatch(change -> change.getFilename().equals(changeSet.getFilename()))) {
-                Migration migrationFromMigration = changeSet.toMigration();
-                executedChangesToCheck.add(migrationFromMigration);
+                    .anyMatch(change -> change.getFilename().equals(changeSet.getFilename())))
+            {
+                this.executedChangeSets.add(changeSet);
+                this.executedMigrations.add(changeSet.toMigration());
             } else {
                 notExecutedChangeSets.add(changeSet);
             }
         }
+        Collections.reverse(notExecutedChangeSets);
+    }
 
-        compareOrderAndMD5Sum(executedChangesToCheck, executedMigrations);
+    public void executeTillVersion() throws SQLException {
+        if(migVersion==null){
+            dbService.executeAllChangeSets(notExecutedChangeSets);
+        }
 
-        return notExecutedChangeSets;
+        List<String> namesOfNotExecuted = notExecutedChangeSets.stream()
+                .map(BaseMigCha::getFilename)
+                .toList();
+
+        List<String> namesOfExecuted = executedMigrations.stream()
+                .map(BaseMigCha::getFilename)
+                .toList();
+
+        if(!namesOfNotExecuted.contains(migVersion)){
+            List<ChangeSet> notExecutedTillVersion = getTillVersionChangeSets(notExecutedChangeSets);
+            dbService.executeAllChangeSets(notExecutedTillVersion);
+        } else if (!namesOfExecuted.contains(migVersion)) {
+            List<ChangeSet> executedTillVersion = getTillVersionChangeSets(executedChangeSets);
+            dbService.rollBackChangeSets(executedTillVersion);
+        }
+    }
+
+    private List<ChangeSet> getTillVersionChangeSets(List<ChangeSet> sets) {
+        List<ChangeSet> result = new ArrayList<>();
+
+        for(ChangeSet changeSet : sets){
+            result.add(changeSet);
+            if(changeSet.getFilename().equals(migVersion)){
+                break;
+            }
+        }
+        return result;
     }
 
     private boolean compareOrderAndMD5Sum(List<Migration> executedMigrations, List<Migration> migrations) {

@@ -165,9 +165,14 @@ public class DatabaseRepository {
         return migrations;
     }
 
-    public void addMigration(Migration migration) {
+    public void addMigration(Migration migration){
         if(connection==null) {
             throw new RuntimeException("Database connection not open");
+        }
+        try {
+            connection.setAutoCommit(false);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
         }
 
         String sql = """ 
@@ -189,12 +194,17 @@ public class DatabaseRepository {
         }
     }
 
-    public void executeChangeSet(ChangeSet changeSet) throws SQLException {
+    public void executeChangeSet(ChangeSet changeSet, boolean isRollBack) throws SQLException {
         if (connection == null || connection.isClosed()) {
             throw new RuntimeException("Database connection is not open");
         }
 
-        List<String> sqls = changeSet.getStatements();
+        List<String> sqls = null;
+        if (isRollBack) {
+            sqls = changeSet.getRollBack();
+        }else{
+            sqls = changeSet.getStatements();
+        }
 
         try {
             connection.setAutoCommit(false);
@@ -229,5 +239,29 @@ public class DatabaseRepository {
             migrations.add(migration);
         }
         return migrations;
+    }
+
+    public void deleteMigration(Migration migration) {
+        if(connection==null) {
+            throw new RuntimeException("Database connection not open");
+        }
+        try {
+            connection.setAutoCommit(false);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
+
+        String sql = """ 
+             DELETE FROM CHANGELOG where filename = ?
+             """;
+        try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
+            pstmt.setString(1, migration.getFilename());
+
+            pstmt.executeUpdate();
+        } catch (Exception e) {
+            rollbackAndClose();
+            logger.error("Failed to delete migration", e);
+            throw new RuntimeException("Failed to delete migration", e);
+        }
     }
 }

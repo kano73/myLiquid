@@ -10,6 +10,7 @@ import java.util.Objects;
 public class ChangeSet extends BaseMigCha{
 
     private List<String> statements;
+    private List<String> rollBack;
 
     public List<String> getStatements() {
         return statements;
@@ -17,6 +18,14 @@ public class ChangeSet extends BaseMigCha{
 
     public void setStatements(List<String> statements) {
         this.statements = statements;
+    }
+
+    public List<String> getRollBack() {
+        return rollBack;
+    }
+
+    public void setRollBack(List<String> rollBack) {
+        this.rollBack = rollBack;
     }
 
     public String toJsonText() {

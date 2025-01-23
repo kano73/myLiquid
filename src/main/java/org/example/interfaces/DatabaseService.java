@@ -11,5 +11,5 @@ public interface DatabaseService {
 
     ArrayList<Migration> getAllChanges();
 
-    boolean executeAllMigrations(List<ChangeSet> changeSets) throws SQLException;
+    boolean executeAllChangeSets(List<ChangeSet> changeSets) throws SQLException;
 }

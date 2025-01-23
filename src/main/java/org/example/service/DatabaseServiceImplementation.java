@@ -11,6 +11,7 @@ import java.sql.SQLException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Objects;
+import java.util.stream.Collectors;
 
 public class DatabaseServiceImplementation implements DatabaseService {
 
@@ -36,7 +37,15 @@ public class DatabaseServiceImplementation implements DatabaseService {
     }
 
     @Override
-    public boolean executeAllMigrations(List<ChangeSet> changeSets) throws SQLException {
+    public boolean executeAllChangeSets(List<ChangeSet> changeSets) throws SQLException {
+        return executeChangeSets(changeSets, false);
+    }
+
+    public boolean rollBackChangeSets(List<ChangeSet> executedTillVersion) throws SQLException {
+        return executeChangeSets(executedTillVersion, true);
+    }
+
+    private boolean executeChangeSets(List<ChangeSet> changeSets, boolean isRollback) throws SQLException {
         try {
             if (!databaseRepository.acquireLock()) {
                 log.warn("Unable to acquire lock, another user is changing it");
@@ -44,33 +53,39 @@ public class DatabaseServiceImplementation implements DatabaseService {
             }
 
             databaseRepository.openConnection();
-            try {
-                List<Migration> changesFromMig = changeSets.stream()
-                        .map(ChangeSet::toMigration)
-                        .toList();
 
-                for (ChangeSet changeSet : changeSets) {
-                    try {
-                        databaseRepository.executeChangeSet(changeSet);
-                        changesFromMig.stream()
-                                .filter(change -> Objects.equals(changeSet.getFilename(), change.getFilename()))
-                                .forEach(databaseRepository::addMigration);
-                    } catch (SQLException e) {
-                        log.error("Migration failed: " + changeSet.getFilename(), e);
-                        databaseRepository.rollbackAndClose();
-                        throw new RuntimeException("Failed to execute migration: " + changeSet.getFilename(), e);
-                    }
+            List<Migration> changesFromMig = changeSets.stream()
+                    .map(ChangeSet::toMigration)
+                    .toList();
+
+            changeSets.forEach(changeSet -> {
+                try {
+                    databaseRepository.executeChangeSet(changeSet, isRollback);
+
+                    changesFromMig.stream()
+                            .filter(change -> Objects.equals(changeSet.getFilename(), change.getFilename()))
+                            .forEach(migration -> {
+                                if (isRollback) {
+                                    databaseRepository.deleteMigration(migration);
+                                } else {
+                                    databaseRepository.addMigration(migration);
+                                }
+                            });
+
+                } catch (SQLException e) {
+                    log.error("Migration failed: " + changeSet.getFilename(), e);
+                    databaseRepository.rollbackAndClose();
+                    throw new RuntimeException("Failed to execute migration: " + changeSet.getFilename(), e);
                 }
+            });
 
-                databaseRepository.commit();
-                return true;
-            } catch (Exception e) {
-                log.error("Error executing migrations", e);
-                databaseRepository.rollbackAndClose();
-                throw new RuntimeException(e);
-            } finally {
-                databaseRepository.closeConnection();
-            }
+            databaseRepository.commit();
+            return true;
+
+        } catch (Exception e) {
+            log.error("Error executing migrations", e);
+            databaseRepository.rollbackAndClose();
+            throw new RuntimeException("Error executing migrations", e);
         } finally {
             databaseRepository.releaseLock();
         }
@@ -84,5 +99,4 @@ public class DatabaseServiceImplementation implements DatabaseService {
             throw new RuntimeException("Error during addChange operation", e);
         }
     }
-
 }

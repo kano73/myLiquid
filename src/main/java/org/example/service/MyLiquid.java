@@ -13,28 +13,21 @@ public class MyLiquid {
 
     private final DatabaseServiceImplementation dbService;
     private final ChangesRepository migRepository;
-    private final CompareMigAndChaService compareMigAndChaService;
+    private final MigrationExecutionService migrationExecutionService;
     private final GitService gitService;
 
-    public MyLiquid(DatabaseServiceImplementation dbService, ChangesRepository migRepository, CompareMigAndChaService compareMigAndChaService, GitService gitService) {
+    public MyLiquid(DatabaseServiceImplementation dbService, ChangesRepository migRepository, MigrationExecutionService migrationExecutionService, GitService gitService) {
         this.dbService = dbService;
         this.migRepository = migRepository;
-        this.compareMigAndChaService = compareMigAndChaService;
+        this.migrationExecutionService = migrationExecutionService;
         this.gitService = gitService;
     }
 
-    public void commitAndPushToGit(String message){
+    public void commitPushToGit(String message){
         gitService.addAllFiles().commit(message).push();
     }
 
     public void migrate() throws SQLException {
-        List<ChangeSet> changeSets = compareMigAndChaService.findNotExecutedChangesAndCheckExecuted();
 
-        if (changeSets.isEmpty()) {
-            logger.info("No migrations found, your db is up to date");
-            return;
-        }
-
-        dbService.executeAllMigrations(changeSets);
     }
 }
