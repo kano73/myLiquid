@@ -3,15 +3,13 @@ package org.example.service;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.exeptions.Md5SumNotMatch;
-import org.example.model.Change;
-import org.example.model.MasterChangeLog;
+import org.example.model.ChangeLog;
 import org.example.model.Migration;
-import org.example.repository.MigrationRepository;
+import org.example.model.ChangeSet;
+import org.example.repository.ChangesRepository;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Objects;
-import java.util.stream.Collectors;
 
 public class CompareMigAndChaService {
     private final DatabaseServiceImplementation dbService;
@@ -22,70 +20,60 @@ public class CompareMigAndChaService {
         this.dbService = dbService;
     }
 
-    public List<Migration> findNotExecutedMigrations() {
-        List<Change> executedChanges = dbService.getAllChanges();
+    public List<ChangeSet> findNotExecutedChangesAndCheckExecuted() {
+        List<Migration> executedMigrations = dbService.getAllChanges();
 
+        ChangeLog changeLog = ChangesRepository.readMasterChanges();
+        List<String> filesInOrder = changeLog.getChanges();
 
-        List<Migration> migrationsWithOutOrder = MigrationRepository.readAllChanges();
-        MasterChangeLog masterChangeLog = MigrationRepository.readMasterChanges();
-        List<String> filesInOrder = masterChangeLog.getChanges();
+        List<ChangeSet> changeSets = ChangesRepository.readChangesFromList(filesInOrder);
 
-//        sort
-        List<Migration> migrations =  filesInOrder.stream()
-                .map(name -> migrationsWithOutOrder.stream()
-                        .filter(migration -> Objects.equals(migration.getFilename(), name))
-                        .findFirst()
-                        .orElseThrow(() -> new RuntimeException("Change not found for: " + name)))
-                .toList();
+        List<Migration> executedChangesToCheck = new ArrayList<>();
+        List<ChangeSet> notExecutedChangeSets = new ArrayList<>();
 
-        List<Change> allChangesFromMig = migrations.stream()
-                .map(Migration::toChange)
-                .collect(Collectors.toList());
-
-        List<Change> executedChangesToCheck = new ArrayList<>();
-        List<Migration> notExecutedMigrations = new ArrayList<>();
-
-        for (Migration migration : migrations) {
-            if (executedChanges.stream()
-                    .anyMatch(change -> change.getFilename().equals(migration.getFilename()))) {
-                Change changeFromMigration = migration.toChange();
-                executedChangesToCheck.add(changeFromMigration);
+        for (ChangeSet changeSet : changeSets) {
+            if (executedMigrations.stream()
+                    .anyMatch(change -> change.getFilename().equals(changeSet.getFilename()))) {
+                Migration migrationFromMigration = changeSet.toMigration();
+                executedChangesToCheck.add(migrationFromMigration);
             } else {
-                notExecutedMigrations.add(migration);
+                notExecutedChangeSets.add(changeSet);
             }
         }
 
-        try {
-            compareOrderAndMD5Sum(executedChangesToCheck, executedChanges);
-        } catch (Md5SumNotMatch md5SumNotMatch) {
-            logger.error(md5SumNotMatch.getMessage(), md5SumNotMatch);
-            throw md5SumNotMatch;
-        } catch (RuntimeException e) {
-            logger.warn(e.getMessage(), e);
-            throw e;
-        }
+        System.out.println("Executed changes to check: " );
+        executedChangesToCheck.forEach(System.out::println);
 
-        return notExecutedMigrations;
+        System.out.println("Executed migs: " );
+        executedMigrations.forEach(System.out::println);
+
+        compareOrderAndMD5Sum(executedChangesToCheck, executedMigrations);
+
+        return notExecutedChangeSets;
     }
 
-    private boolean compareOrderAndMD5Sum(List<Change> executedMigrations, List<Change> changes) {
-        if (executedMigrations.size() != changes.size()) {
-            throw new RuntimeException("The number of changes in master_migrations does not match the number of changes in database.");
+    private boolean compareOrderAndMD5Sum(List<Migration> executedMigrations, List<Migration> migrations) {
+        if (executedMigrations.size() != migrations.size()) {
+            throw new RuntimeException("The number of migrations in master_changelog " +
+                    "does not match the number of migrations in database."+"\n"+
+                    "!!!this is unexpected behaviour!!!");
         }
 
         for (int i = 0; i < executedMigrations.size(); i++) {
-            Change fromMigration = executedMigrations.get(i);
-            Change fromExecuted = changes.get(i);
+            Migration fromMigration = executedMigrations.get(i);
+            Migration fromExecuted = migrations.get(i);
 
             if(!fromMigration.getFilename().equals(fromExecuted.getFilename())) {
-                throw new RuntimeException("The filenames in master_migrations "+fromMigration.getFilename()+
-                        " do not match the filenames in database "+fromExecuted.getFilename()+" \n" +
-                        " check the order");
+                throw new RuntimeException("The filename in master_changelog "+fromMigration.getFilename()+
+                        " do not match the filename in database "+fromExecuted.getFilename()+" \n" +
+                        " check the order OR run myLiquid with git pull to get proper files");
             }
             if (!fromMigration.getMd5sum().equals(fromExecuted.getMd5sum())) {
-                throw new Md5SumNotMatch("MD5 mismatch at index " + i +
-                        ". Migration: " + fromMigration +
-                        ", Executed: " + fromExecuted+ "\n you better do git pull to get proper files");
+                throw new Md5SumNotMatch("MD5 mismatch at file: " + fromMigration.getFilename() +".\n"+
+                        "thy yo run myLiquid with pull request" +
+                        "More details: "+
+                        " From file: " + fromMigration + "\n" +
+                        ", Executed: " + fromExecuted+ "\n you better run myLiquid with git pull to get proper files");
             }
 
         }

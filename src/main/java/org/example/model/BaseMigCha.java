@@ -7,8 +7,6 @@ public class BaseMigCha {
     private String filename;
     private String description;
 
-
-
     public String getAuthor() {
         return author;
     }
@@ -47,10 +45,8 @@ public class BaseMigCha {
 
     @Override
     public String toString() {
-        return "BaseMigCha{" +
-                "author='" + author + '\'' +
+        return ", author='" + author + '\'' +
                 ", filename='" + filename + '\'' +
-                ", description='" + description + '\'' +
-                '}';
+                ", description='" + description;
     }
 }

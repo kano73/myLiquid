@@ -4,8 +4,8 @@ import com.zaxxer.hikari.HikariDataSource;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.example.config.HikariCpConfig;
-import org.example.model.Change;
 import org.example.model.Migration;
+import org.example.model.ChangeSet;
 
 import java.sql.*;
 import java.util.ArrayList;
@@ -31,9 +31,9 @@ public class DatabaseRepository {
         return setLockedStatus(sql, "Lock acquired successfully.", "Lock is already acquired by another process.");
     }
 
-    public boolean releaseLock() throws SQLException {
+    public void releaseLock() throws SQLException {
         String sql = "UPDATE LOCK SET LOCKED = FALSE WHERE ID = 1";
-        return setLockedStatus(sql, "Lock released successfully.", "Failed to release lock");
+        setLockedStatus(sql, "Lock released successfully.", "Failed to release lock");
     }
 
     private boolean setLockedStatus(String sql, String successMessage, String errorMessage) throws SQLException {
@@ -110,13 +110,12 @@ public class DatabaseRepository {
         }
     }
 
-    public DatabaseRepository commit() {
+    public void commit() {
         try {
             if (connection == null && connection.isClosed()) {
                 throw new RuntimeException("Database connection is closed");
             }
             connection.commit();
-            return this;
         } catch (SQLException e) {
             throw new RuntimeException("Failed to commit ", e);
         }
@@ -146,7 +145,7 @@ public class DatabaseRepository {
         }
     }
 
-    public ArrayList<Change> getAllChanges() {
+    public ArrayList<Migration> getAllMigrations() {
         if(connection==null) {
             throw new RuntimeException("Database connection not open");
         }
@@ -155,18 +154,18 @@ public class DatabaseRepository {
          SELECT ID, AUTHOR, FILENAME, MD5SUM, DESCRIPTION, EXECUTED_AT
          FROM CHANGELOG ORDER BY ID DESC ;""";
 
-        ArrayList<Change> changes = new ArrayList<>();
+        ArrayList<Migration> migrations = new ArrayList<>();
         try (Statement stmt = connection.createStatement();
              ResultSet rs = stmt.executeQuery(sql)) {
 
-            changes = rowMapper(rs);
+            migrations = rowMapper(rs);
         } catch (Exception e) {
-            throw new RuntimeException("Failed to fetch changes", e);
+            throw new RuntimeException("Failed to fetch migrations", e);
         }
-        return changes;
+        return migrations;
     }
 
-    public boolean addChange(Change change) {
+    public void addMigration(Migration migration) {
         if(connection==null) {
             throw new RuntimeException("Database connection not open");
         }
@@ -177,25 +176,25 @@ public class DatabaseRepository {
              VALUES (?, ?, ?, ?)
              """;
         try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
-            pstmt.setString(1, change.getAuthor());
-            pstmt.setString(2, change.getFilename());
-            pstmt.setString(3, change.getMd5sum());
-            pstmt.setString(4, change.getDescription());
+            pstmt.setString(1, migration.getAuthor());
+            pstmt.setString(2, migration.getFilename());
+            pstmt.setString(3, migration.getMd5sum());
+            pstmt.setString(4, migration.getDescription());
 
-            return pstmt.executeUpdate() > 0;
+            pstmt.executeUpdate();
         } catch (Exception e) {
             rollbackAndClose();
-            logger.error("Failed to add change", e);
-            throw new RuntimeException("Failed to add change", e);
+            logger.error("Failed to add migration", e);
+            throw new RuntimeException("Failed to add migration", e);
         }
     }
 
-    public void executeMigration(Migration migration) throws SQLException {
+    public void executeChangeSet(ChangeSet changeSet) throws SQLException {
         if (connection == null || connection.isClosed()) {
             throw new RuntimeException("Database connection is not open");
         }
 
-        List<String> sqls = migration.getStatements();
+        List<String> sqls = changeSet.getStatements();
 
         try {
             connection.setAutoCommit(false);
@@ -206,29 +205,29 @@ public class DatabaseRepository {
                     logger.info("Executed SQL: " + sql);
                 } catch (SQLException e) {
                     connection.rollback();
-                    logger.error("Failed to execute SQL: " + sql + migration.getFilename(), e);
+                    logger.error("Failed to execute SQL: " + sql +" , from file: "+ changeSet.getFilename(), e);
                     throw new RuntimeException("Failed to execute migration", e);
                 }
             }
-            logger.info("Migration executed successfully: " + migration.getFilename());
+            logger.info("Migration executed successfully: " + changeSet.getFilename());
         } catch (SQLException e) {
             connection.rollback();
             throw new RuntimeException("Migration execution failed. Rolled back transaction.", e);
         }
     }
 
-    private ArrayList<Change> rowMapper(ResultSet rs) throws SQLException {
-        ArrayList<Change> changes = new ArrayList<>();
+    private ArrayList<Migration> rowMapper(ResultSet rs) throws SQLException {
+        ArrayList<Migration> migrations = new ArrayList<>();
         while (rs.next()) {
-            Change change = new Change();
-            change.setId(rs.getInt("ID"));
-            change.setAuthor(rs.getString("AUTHOR"));
-            change.setFilename(rs.getString("FILENAME"));
-            change.setMd5sum(rs.getString("MD5SUM"));
-            change.setDescription(rs.getString("DESCRIPTION"));
-            change.setExecuted_at(rs.getTimestamp("EXECUTED_AT").toLocalDateTime());
-            changes.add(change);
+            Migration migration = new Migration();
+            migration.setId(rs.getInt("ID"));
+            migration.setAuthor(rs.getString("AUTHOR"));
+            migration.setFilename(rs.getString("FILENAME"));
+            migration.setMd5sum(rs.getString("MD5SUM"));
+            migration.setDescription(rs.getString("DESCRIPTION"));
+            migration.setExecuted_at(rs.getTimestamp("EXECUTED_AT").toLocalDateTime());
+            migrations.add(migration);
         }
-        return changes;
+        return migrations;
     }
 }

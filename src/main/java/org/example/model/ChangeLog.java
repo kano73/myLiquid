@@ -3,7 +3,7 @@ package org.example.model;
 import java.util.List;
 import java.util.Objects;
 
-public class MasterChangeLog {
+public class ChangeLog {
     private List<String> changes;
 
     public List<String> getChanges() {
@@ -17,7 +17,7 @@ public class MasterChangeLog {
     @Override
     public boolean equals(Object o) {
         if (o == null || getClass() != o.getClass()) return false;
-        MasterChangeLog that = (MasterChangeLog) o;
+        ChangeLog that = (ChangeLog) o;
         return Objects.equals(changes, that.changes);
     }
 
@@ -28,7 +28,7 @@ public class MasterChangeLog {
 
     @Override
     public String toString() {
-        return "MasterChangeLog{" +
+        return "ChangeLog{" +
                 "changes=" + changes.toString() +
                 '}';
     }

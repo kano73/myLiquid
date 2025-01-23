@@ -1,17 +1,17 @@
-import org.example.model.Change;
 import org.example.model.Migration;
+import org.example.model.ChangeSet;
 import org.junit.jupiter.api.Test;
 
 public class ModelTest {
     @Test
     public void testMigToCha() {
-        Migration migration = new Migration();
-        migration.setFilename("first");
-        migration.setDescription("first");
-        migration.setAuthor("first");
+        ChangeSet changeSet = new ChangeSet();
+        changeSet.setFilename("first");
+        changeSet.setDescription("first");
+        changeSet.setAuthor("first");
 
-        Change change = migration.toChange();
+        Migration migration = changeSet.toMigration();
 
-        System.out.println(change);
+        System.out.println(migration);
     }
 }

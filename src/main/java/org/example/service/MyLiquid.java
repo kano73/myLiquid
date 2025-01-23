@@ -1,24 +1,22 @@
 package org.example.service;
 
-import org.example.model.Change;
-import org.example.model.Migration;
-import org.example.repository.MigrationRepository;
-import org.slf4j.Logger;
-import org.slf4j.LoggerFactory;
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+import org.example.model.ChangeSet;
+import org.example.repository.ChangesRepository;
 
 import java.sql.SQLException;
 import java.util.List;
-import java.util.stream.Collectors;
 
 public class MyLiquid {
-    private static final Logger log = LoggerFactory.getLogger(MyLiquid.class);
+    private static final Logger logger = LogManager.getLogger(MyLiquid.class);
 
     private final DatabaseServiceImplementation dbService;
-    private final MigrationRepository migRepository;
+    private final ChangesRepository migRepository;
     private final CompareMigAndChaService compareMigAndChaService;
     private final GitService gitService;
 
-    public MyLiquid(DatabaseServiceImplementation dbService, MigrationRepository migRepository, CompareMigAndChaService compareMigAndChaService, GitService gitService) {
+    public MyLiquid(DatabaseServiceImplementation dbService, ChangesRepository migRepository, CompareMigAndChaService compareMigAndChaService, GitService gitService) {
         this.dbService = dbService;
         this.migRepository = migRepository;
         this.compareMigAndChaService = compareMigAndChaService;
@@ -30,11 +28,13 @@ public class MyLiquid {
     }
 
     public void migrate() throws SQLException {
-        List<Migration> migrations = compareMigAndChaService.findNotExecutedMigrations();
-        if (migrations.isEmpty()) {
-            log.info("No migrations found");
+        List<ChangeSet> changeSets = compareMigAndChaService.findNotExecutedChangesAndCheckExecuted();
+
+        if (changeSets.isEmpty()) {
+            logger.info("No migrations found, your db is up to date");
             return;
         }
-        dbService.executeAllMigrations(migrations);
+
+        dbService.executeAllMigrations(changeSets);
     }
 }

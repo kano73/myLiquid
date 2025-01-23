@@ -1,8 +1,8 @@
 package org.example.service;
 
 import org.example.interfaces.DatabaseService;
-import org.example.model.Change;
 import org.example.model.Migration;
+import org.example.model.ChangeSet;
 import org.example.repository.DatabaseRepository;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -22,10 +22,10 @@ public class DatabaseServiceImplementation implements DatabaseService {
     }
 
     @Override
-    public ArrayList<Change> getAllChanges(){
+    public ArrayList<Migration> getAllChanges(){
         try{
             databaseRepository.openConnection();
-            return databaseRepository.getAllChanges();
+            return databaseRepository.getAllMigrations();
         }catch(Exception e){
             databaseRepository.rollbackAndClose();
             throw new RuntimeException(e);
@@ -36,7 +36,7 @@ public class DatabaseServiceImplementation implements DatabaseService {
     }
 
     @Override
-    public boolean executeAllMigrations(List<Migration> migrations) throws SQLException {
+    public boolean executeAllMigrations(List<ChangeSet> changeSets) throws SQLException {
         try {
             if (!databaseRepository.acquireLock()) {
                 log.warn("Unable to acquire lock, another user is changing it");
@@ -45,20 +45,20 @@ public class DatabaseServiceImplementation implements DatabaseService {
 
             databaseRepository.openConnection();
             try {
-                List<Change> changesFromMig = migrations.stream()
-                        .map(Migration::toChange)
+                List<Migration> changesFromMig = changeSets.stream()
+                        .map(ChangeSet::toMigration)
                         .toList();
 
-                for (Migration migration : migrations) {
+                for (ChangeSet changeSet : changeSets) {
                     try {
-                        databaseRepository.executeMigration(migration);
+                        databaseRepository.executeChangeSet(changeSet);
                         changesFromMig.stream()
-                                .filter(change -> Objects.equals(migration.getFilename(), change.getFilename()))
-                                .forEach(databaseRepository::addChange);
+                                .filter(change -> Objects.equals(changeSet.getFilename(), change.getFilename()))
+                                .forEach(databaseRepository::addMigration);
                     } catch (SQLException e) {
-                        log.error("Migration failed: " + migration.getFilename(), e);
+                        log.error("Migration failed: " + changeSet.getFilename(), e);
                         databaseRepository.rollbackAndClose();
-                        throw new RuntimeException("Failed to execute migration: " + migration.getFilename(), e);
+                        throw new RuntimeException("Failed to execute migration: " + changeSet.getFilename(), e);
                     }
                 }
 
@@ -76,9 +76,9 @@ public class DatabaseServiceImplementation implements DatabaseService {
         }
     }
 
-    private boolean addChange(Change change) {
+    private boolean addChange(Migration migration) {
         try {
-            databaseRepository.addChange(change);
+            databaseRepository.addMigration(migration);
             return true;
         } catch (Exception e) {
             throw new RuntimeException("Error during addChange operation", e);
