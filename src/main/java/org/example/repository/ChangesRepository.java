@@ -39,16 +39,14 @@ public class ChangesRepository {
             try {
                 String content = Files.readString(path);
 
-                changeSets.add(gson.fromJson(content, ChangeSet.class));
+                ChangeSet changeSet = gson.fromJson(content, ChangeSet.class);
+                changeSet.setFilename(filename);
+                changeSets.add(changeSet);
             }catch (Exception e) {
                 logger.error("error while reading :{}", path, e);
                 throw new RuntimeException(e);
             }
         }
-
-        System.out.println("changesets read");
-        changeSets.forEach(System.out::println);
-
         return changeSets;
     }
 
@@ -93,8 +91,6 @@ public class ChangesRepository {
             logger.error("error while reading master_changelog.json", e);
             throw new RuntimeException(e);
         }
-
-        System.out.println(master);
 
         return master;
     }

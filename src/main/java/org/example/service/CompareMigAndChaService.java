@@ -41,12 +41,6 @@ public class CompareMigAndChaService {
             }
         }
 
-        System.out.println("Executed changes to check: " );
-        executedChangesToCheck.forEach(System.out::println);
-
-        System.out.println("Executed migs: " );
-        executedMigrations.forEach(System.out::println);
-
         compareOrderAndMD5Sum(executedChangesToCheck, executedMigrations);
 
         return notExecutedChangeSets;
