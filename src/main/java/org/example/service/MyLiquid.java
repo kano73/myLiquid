@@ -2,23 +2,27 @@ package org.example.service;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.example.model.ChangeSet;
-import org.example.repository.ChangesRepository;
+import org.example.config.GetProperties;
 
-import java.sql.SQLException;
-import java.util.List;
+import java.time.LocalDateTime;
+import java.util.Properties;
 
 public class MyLiquid {
     private static final Logger logger = LogManager.getLogger(MyLiquid.class);
-
-    private final DatabaseServiceImplementation dbService;
-    private final ChangesRepository migRepository;
     private final MigrationExecutionService migrationExecutionService;
     private final GitService gitService;
 
-    public MyLiquid(DatabaseServiceImplementation dbService, ChangesRepository migRepository, MigrationExecutionService migrationExecutionService, GitService gitService) {
-        this.dbService = dbService;
-        this.migRepository = migRepository;
+    private static String migrationLevel;
+
+    static{
+        Properties prop = GetProperties.get();
+        migrationLevel = prop.getProperty("myliquid.migration.level");
+        if(migrationLevel == null || migrationLevel.isEmpty()){
+            migrationLevel="mig";
+        }
+    }
+
+    public MyLiquid(MigrationExecutionService migrationExecutionService, GitService gitService) {
         this.migrationExecutionService = migrationExecutionService;
         this.gitService = gitService;
     }
@@ -27,7 +31,17 @@ public class MyLiquid {
         gitService.addAllFiles().commit(message).push();
     }
 
-    public void migrate() throws SQLException {
+    public void pullFromGit(){
+        gitService.pull();
+    }
 
+    public void migrate(){
+        if(migrationLevel.equals("push_mig")){
+            LocalDateTime now = LocalDateTime.now();
+            commitPushToGit("mig"+now);
+        }else if(migrationLevel.equals("pull_mig")){
+            pullFromGit();
+        }
+        migrationExecutionService.migrate();
     }
 }

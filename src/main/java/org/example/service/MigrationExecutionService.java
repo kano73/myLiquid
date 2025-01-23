@@ -11,17 +11,18 @@ import org.example.model.ChangeSet;
 import org.example.repository.ChangesRepository;
 
 import java.sql.SQLException;
-import java.util.ArrayList;
-import java.util.Collections;
-import java.util.List;
-import java.util.Properties;
+import java.util.*;
 
 public class MigrationExecutionService {
     private static String migVersion;
 
-    private List<Migration> executedMigrations;
-    private List<ChangeSet> executedChangeSets;
-    private List<ChangeSet> notExecutedChangeSets;
+    private List<Migration> executedMigrationsToCheck = new ArrayList<>();
+
+    private List<Migration> executedMigrationsFromDB = new ArrayList<>();
+    private List<Migration> notExecutedMigrations= new ArrayList<>();
+
+    private List<ChangeSet> executedChangeSets= new ArrayList<>();
+    private List<ChangeSet> notExecutedChangeSets= new ArrayList<>();
 
     private final DatabaseServiceImplementation dbService;
     private static final Logger logger = LogManager.getLogger(MigrationExecutionService.class);
@@ -29,6 +30,9 @@ public class MigrationExecutionService {
     static {
         Properties properties = GetProperties.get();
         migVersion = properties.getProperty("myliquid.migration.version");
+        if (Objects.equals(migVersion, "")) {
+            migVersion=null;
+        }
     }
 
     public MigrationExecutionService(DatabaseServiceImplementation dbService) {
@@ -36,11 +40,19 @@ public class MigrationExecutionService {
     }
 
     public void migrate(){
+        try {
+            groupSetsAndMigs();
+            compareOrderAndMD5Sum();
+            executeTillVersion();
+            logger.info("Your db version: "+migVersion);
+        } catch (SQLException e) {
+            throw new RuntimeException(e);
+        }
 
     }
 
-    public void groupSetsAndMig() throws SQLException {
-        List<Migration> executedMigrations = dbService.getAllChanges();
+    public void groupSetsAndMigs() throws SQLException {
+        executedMigrationsFromDB = dbService.getAllChanges();
 
         ChangeLog changeLog = ChangesRepository.readMasterChanges();
         List<String> filesInOrder = changeLog.getChanges();
@@ -48,62 +60,92 @@ public class MigrationExecutionService {
         List<ChangeSet> changeSets = ChangesRepository.readChangesFromList(filesInOrder);
 
         for (ChangeSet changeSet : changeSets) {
-            if (executedMigrations.stream()
+            if (executedMigrationsFromDB.stream()
                     .anyMatch(change -> change.getFilename().equals(changeSet.getFilename())))
             {
-                this.executedChangeSets.add(changeSet);
-                this.executedMigrations.add(changeSet.toMigration());
+                executedChangeSets.add(changeSet);
+                executedMigrationsToCheck.add(changeSet.toMigration());
             } else {
                 notExecutedChangeSets.add(changeSet);
+                notExecutedMigrations.add(changeSet.toMigration());
             }
         }
         Collections.reverse(notExecutedChangeSets);
     }
 
     public void executeTillVersion() throws SQLException {
-        if(migVersion==null){
+        if(migVersion == null || Objects.equals(migVersion, "")){
+
+            if(notExecutedChangeSets.isEmpty()){
+                logger.info("Your db is up to date");
+                try{
+                    migVersion = executedMigrationsFromDB.getFirst().getFilename();
+                }catch(Exception e){
+                    migVersion="-none-";
+                }
+                return;
+            }
+            migVersion= notExecutedMigrations.getLast().getFilename();
             dbService.executeAllChangeSets(notExecutedChangeSets);
+            return;
         }
 
         List<String> namesOfNotExecuted = notExecutedChangeSets.stream()
                 .map(BaseMigCha::getFilename)
                 .toList();
 
-        List<String> namesOfExecuted = executedMigrations.stream()
+        List<String> namesOfExecuted = executedMigrationsFromDB.stream()
                 .map(BaseMigCha::getFilename)
                 .toList();
 
-        if(!namesOfNotExecuted.contains(migVersion)){
-            List<ChangeSet> notExecutedTillVersion = getTillVersionChangeSets(notExecutedChangeSets);
+        if(namesOfNotExecuted.contains(migVersion)){
+            List<ChangeSet> notExecutedTillVersion = new ArrayList<>();
+
+            for(ChangeSet changeSet : notExecutedChangeSets){
+                notExecutedTillVersion.add(changeSet);
+                if(changeSet.getFilename().equals(migVersion)){
+                    break;
+                }
+            }
+
+            if(notExecutedTillVersion.isEmpty()){
+                logger.info("Your db is up to date");
+                return;
+            }
             dbService.executeAllChangeSets(notExecutedTillVersion);
-        } else if (!namesOfExecuted.contains(migVersion)) {
-            List<ChangeSet> executedTillVersion = getTillVersionChangeSets(executedChangeSets);
+        }
+        else if (namesOfExecuted.contains(migVersion)) {
+            List<ChangeSet> executedTillVersion = new ArrayList<>();
+
+            for(ChangeSet changeSet : executedChangeSets){
+                if(changeSet.getFilename().equals(migVersion)){
+                    break;
+                }
+                executedTillVersion.add(changeSet);
+            }
+
+            if(executedTillVersion.isEmpty()){
+                logger.info("Your db is up to date");
+                return;
+            }
+            logger.info("rolling back process started");
             dbService.rollBackChangeSets(executedTillVersion);
         }
-    }
-
-    private List<ChangeSet> getTillVersionChangeSets(List<ChangeSet> sets) {
-        List<ChangeSet> result = new ArrayList<>();
-
-        for(ChangeSet changeSet : sets){
-            result.add(changeSet);
-            if(changeSet.getFilename().equals(migVersion)){
-                break;
-            }
+        else{
+            throw new RuntimeException("Migrated version: "+migVersion+" do not match any file");
         }
-        return result;
     }
 
-    private boolean compareOrderAndMD5Sum(List<Migration> executedMigrations, List<Migration> migrations) {
-        if (executedMigrations.size() != migrations.size()) {
+    private boolean compareOrderAndMD5Sum() {
+        if (executedMigrationsFromDB.size() != executedMigrationsToCheck.size()) {
             throw new RuntimeException("The number of migrations in master_changelog " +
                     "does not match the number of migrations in database."+"\n"+
                     "!!!this is unexpected behaviour!!!");
         }
 
-        for (int i = 0; i < executedMigrations.size(); i++) {
-            Migration fromMigration = executedMigrations.get(i);
-            Migration fromExecuted = migrations.get(i);
+        for (int i = 0; i < executedMigrationsFromDB.size(); i++) {
+            Migration fromMigration = executedMigrationsToCheck.get(i);
+            Migration fromExecuted = executedMigrationsFromDB.get(i);
 
             if(!fromMigration.getFilename().equals(fromExecuted.getFilename())) {
                 throw new RuntimeException("The filename in master_changelog "+fromMigration.getFilename()+

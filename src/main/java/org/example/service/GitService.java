@@ -19,7 +19,7 @@ public class GitService {
     private static final Logger logger = LogManager.getLogger(GitService.class);
     private static String token;
     private static String username;
-    private final Git git;
+    private Git git;
 
     public GitService() {
         Properties prop = GetProperties.get();
@@ -32,13 +32,16 @@ public class GitService {
         localPath = localPath == null ? "./myLiquid_changes" : localPath;
 
         if (repoUrl == null || repoUrl.isEmpty()) {
-            throw new IllegalArgumentException("git.link (Link for git repository) property not set");
+            logger.warn("Git repo url is empty");
+            return;
         }
         if(token == null || token.isEmpty()) {
-            throw new IllegalArgumentException("git.token (Token for git repository) property not set");
+            logger.warn("Git token is empty");
+            return;
         }
         if(username == null || username.isEmpty()) {
-            throw new IllegalArgumentException("git.username property not set");
+            logger.warn("Git username is empty");
+            return;
         }
 
         GitService.token = token;

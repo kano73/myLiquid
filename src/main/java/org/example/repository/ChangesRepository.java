@@ -47,6 +47,7 @@ public class ChangesRepository {
                 throw new RuntimeException(e);
             }
         }
+
         return changeSets;
     }
 

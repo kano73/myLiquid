@@ -80,6 +80,7 @@ public class ChangeSet extends BaseMigCha{
         return "ChangeSet{" +
                 super.toString() +
                 " , statements=" + statements +
+                " , rollBack= " + rollBack +
                 '}';
     }
 }

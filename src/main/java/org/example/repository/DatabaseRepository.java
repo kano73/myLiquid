@@ -206,10 +206,13 @@ public class DatabaseRepository {
             sqls = changeSet.getStatements();
         }
 
+
+
         try {
             connection.setAutoCommit(false);
 
             for (String sql : sqls) {
+
                 try (PreparedStatement pstmt = connection.prepareStatement(sql)) {
                     pstmt.executeUpdate();
                     logger.info("Executed SQL: " + sql);
