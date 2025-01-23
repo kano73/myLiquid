@@ -26,6 +26,7 @@ public class ChangeSet extends BaseMigCha{
 
     public void setRollBack(List<String> rollBack) {
         this.rollBack = rollBack;
+
     }
 
     public String toJsonText() {
