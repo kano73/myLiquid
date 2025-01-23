@@ -1,0 +1,3 @@
+[submodule "myLiquid_changes"]
+	path = myLiquid_changes
+	url = https://github.com/kano73/liquidMasterChangeLog
