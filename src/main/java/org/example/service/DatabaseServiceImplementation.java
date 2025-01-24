@@ -40,6 +40,7 @@ public class DatabaseServiceImplementation implements DatabaseService {
         return executeChangeSets(changeSets, false);
     }
 
+    @Override
     public boolean rollBackChangeSets(List<ChangeSet> executedTillVersion) throws SQLException {
         return executeChangeSets(executedTillVersion, true);
     }
@@ -90,12 +91,4 @@ public class DatabaseServiceImplementation implements DatabaseService {
         }
     }
 
-    private boolean addChange(Migration migration) {
-        try {
-            databaseRepository.addMigration(migration);
-            return true;
-        } catch (Exception e) {
-            throw new RuntimeException("Error during addChange operation", e);
-        }
-    }
 }

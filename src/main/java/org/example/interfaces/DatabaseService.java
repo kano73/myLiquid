@@ -12,4 +12,6 @@ public interface DatabaseService {
     ArrayList<Migration> getAllChanges();
 
     boolean executeAllChangeSets(List<ChangeSet> changeSets) throws SQLException;
+
+    boolean rollBackChangeSets(List<ChangeSet> executedTillVersion) throws SQLException;
 }

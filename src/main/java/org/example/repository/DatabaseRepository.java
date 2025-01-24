@@ -202,6 +202,9 @@ public class DatabaseRepository {
         List<String> sqls = null;
         if (isRollBack) {
             sqls = changeSet.getRollBack();
+            if(sqls.isEmpty()) {
+                throw new RuntimeException("Rollback changeset is empty for file: "+changeSet.getFilename());
+            }
         }else{
             sqls = changeSet.getStatements();
         }

@@ -5,10 +5,11 @@ import org.apache.logging.log4j.Logger;
 import org.example.config.GetProperties;
 
 import java.time.LocalDateTime;
+import java.util.Objects;
 import java.util.Properties;
 
-public class MyLiquid {
-    private static final Logger logger = LogManager.getLogger(MyLiquid.class);
+public class MyLiquidStarter {
+    private static final Logger logger = LogManager.getLogger(MyLiquidStarter.class);
     private final MigrationExecutionService migrationExecutionService;
     private final GitService gitService;
 
@@ -22,7 +23,7 @@ public class MyLiquid {
         }
     }
 
-    public MyLiquid(MigrationExecutionService migrationExecutionService, GitService gitService) {
+    public MyLiquidStarter(MigrationExecutionService migrationExecutionService, GitService gitService) {
         this.migrationExecutionService = migrationExecutionService;
         this.gitService = gitService;
     }

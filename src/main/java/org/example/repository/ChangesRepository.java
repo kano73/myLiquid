@@ -51,33 +51,6 @@ public class ChangesRepository {
         return changeSets;
     }
 
-    public static ArrayList<ChangeSet> readAllChanges() {
-        ArrayList<ChangeSet> changeSets = new ArrayList<>();
-
-        Gson gson = new Gson();
-        try (var paths = Files.walk(Paths.get(pathToMigrationsFile))) {
-            paths.filter(Files::isRegularFile)
-                    .forEach(path -> {
-                        try {
-                            String content = Files.readString(path);
-
-                            ChangeSet changeSet = gson.fromJson(content, ChangeSet.class);
-                            changeSet.setFilename(path.getFileName().toString());
-
-                            changeSets.add(changeSet);
-
-                        } catch (IOException e) {
-                            e.printStackTrace();
-                        }
-                    });
-        }catch (Exception e) {
-            logger.error("error while reading changes from: "+pathToMigrationsFile, e);
-            throw new RuntimeException(e);
-        }
-
-        return changeSets;
-    }
-
     public static ChangeLog readMasterChanges(){
         ChangeLog master = new ChangeLog();
 

@@ -15,6 +15,7 @@ import java.util.*;
 
 public class MigrationExecutionService {
     private static String migVersion;
+    private static Boolean md5sumCheck;
 
     private List<Migration> executedMigrationsToCheck = new ArrayList<>();
 
@@ -33,6 +34,8 @@ public class MigrationExecutionService {
         if (Objects.equals(migVersion, "")) {
             migVersion=null;
         }
+
+        md5sumCheck = !Objects.equals(properties.getProperty("myliquid.migration.md5sum_check"), "false");
     }
 
     public MigrationExecutionService(DatabaseServiceImplementation dbService) {
@@ -42,7 +45,7 @@ public class MigrationExecutionService {
     public void migrate(){
         try {
             groupSetsAndMigs();
-            compareOrderAndMD5Sum();
+            if(md5sumCheck) compareOrderAndMD5Sum();
             executeTillVersion();
             logger.info("Your db version: "+migVersion);
         } catch (SQLException e) {
