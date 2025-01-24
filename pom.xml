@@ -11,6 +11,9 @@
         </repository>
     </distributionManagement>
 
+    <url>https://github.com/kano73/myLiquid</url>
+
+
     <profiles>
         <profile>
             <id>github</id>
@@ -24,9 +27,9 @@
     </profiles>
 
 
-    <groupId>org.kano73</groupId>
+    <groupId>kano73</groupId>
     <artifactId>myLiquid</artifactId>
-    <version>1.0.0-SNAPSHOT</version>
+    <version>1.0.0</version>
 
     <properties>
         <maven.compiler.source>21</maven.compiler.source>
